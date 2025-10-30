@@ -1,154 +1,73 @@
-// index.js
-const express = require('express');
-const fetch = require('node-fetch');
+import express from 'express';
+import fetch from 'node-fetch';
+
 const app = express();
 app.use(express.json());
 
-const VRM_API_BASE = 'https://vrmapi.victronenergy.com/v2/installations';
-const VRM_TOKEN = process.env.VRM_TOKEN; // pon aquí el token (secreto) en Render
-const INSTALLATION_ID = process.env.INSTALLATION_ID; // id de instalación VRM
+// Variables de entorno
+const VRM_TOKEN = process.env.VRM_TOKEN;
+const INSTALLATION_ID = process.env.INSTALLATION_ID;
+const PORT = process.env.PORT || 3000;
 
-if (!VRM_TOKEN || !INSTALLATION_ID) {
-  console.warn('Faltan VRM_TOKEN o INSTALLATION_ID en variables de entorno.');
-}
-
-// Helper: búsqueda recursiva para encontrar SOC y PV Power
-function findValue(obj, keysRegex) {
-  if (obj == null) return null;
-  if (typeof obj !== 'object') return null;
-  for (const k of Object.keys(obj)) {
-    try {
-      if (keysRegex.test(k) && typeof obj[k] === 'number') return obj[k];
-      // try nested
-      const nested = obj[k];
-      if (typeof nested === 'object') {
-        const f = findValue(nested, keysRegex);
-        if (f !== null) return f;
-      }
-    } catch(e){
-      // ignore
-    }
-  }
-  return null;
-}
-
-async function getSystemOverview() {
-  const url = `${VRM_API_BASE}/${INSTALLATION_ID}/system-overview`;
-  const res = await fetch(url, {
-    headers: {
-      'X-Authorization': `Token ${VRM_TOKEN}`,
-      'Accept': 'application/json'
-    },
-    timeout: 10000
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(()=>'');
-    throw new Error(`VRM API error ${res.status}: ${txt}`);
-  }
-  const json = await res.json();
-  return json;
-}
-
-function extractSocAndSolar(json) {
-  // Try common fields. If structure differs, use recursive find.
+// Función auxiliar: obtiene SOC y solar desde VRM
+async function getSystemData() {
+  const headers = { 'X-Authorization': `Token ${VRM_TOKEN}` };
   let soc = null;
   let solar = null;
 
-  // common candidate paths seen in different VRM outputs:
   try {
-    if (json && json.battery && typeof json.battery.stateOfCharge === 'number') {
-      soc = json.battery.stateOfCharge;
+    // 1️⃣ Obtener SOC desde stats
+    const stats = await fetch(`https://vrmapi.victronenergy.com/v2/installations/${INSTALLATION_ID}/stats`, { headers });
+    const statsData = await stats.json();
+
+    if (statsData && statsData.records && statsData.records.battery && statsData.records.battery.stateOfCharge) {
+      soc = Math.round(statsData.records.battery.stateOfCharge);
     }
-    if (!soc && json.records && Array.isArray(json.records) && json.records.length) {
-      // attempt
-      const rec = json.records[0];
-      soc = soc || findValue(rec, /soc|stateofcharge|state_of_charge|SoC/i);
-      solar = solar || findValue(rec, /yield|power|pv|production|pvpower/i);
+
+    // 2️⃣ Obtener potencia solar desde overall
+    const overall = await fetch(`https://vrmapi.victronenergy.com/v2/installations/${INSTALLATION_ID}/overall`, { headers });
+    const overallData = await overall.json();
+
+    if (overallData && overallData.records && overallData.records.solar) {
+      solar = Math.round(overallData.records.solar.power || 0);
     }
-  } catch(e){/*ignore*/}
+  } catch (e) {
+    console.error('Error consultando VRM:', e);
+  }
 
-  // fallback: recursive search on whole object
-  soc = soc || findValue(json, /soc|stateofcharge|state_of_charge|SoC/i);
-  solar = solar || findValue(json, /yield|power|pv|production|pvpower/i);
-
-  // normalize to integers
-  if (typeof soc === 'number') soc = Math.round(soc);
-  if (typeof solar === 'number') solar = Math.round(solar);
-
-  return { soc: soc == null ? null : soc, solar: solar == null ? null : solar };
+  return { soc, solar };
 }
 
-// Status route for testing
+// Ruta de prueba
 app.get('/status', async (req, res) => {
-  try {
-    const json = await getSystemOverview();
-    const vals = extractSocAndSolar(json);
-    res.json({ ok: true, installation: INSTALLATION_ID, ...vals, raw: json });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+  const data = await getSystemData();
+  res.json({ ok: true, installation: INSTALLATION_ID, ...data });
 });
 
-// Alexa endpoint (POST)
+// Endpoint de Alexa
 app.post('/alexa', async (req, res) => {
-  try {
-    // Optional: validate skill signature/token here (omitted for brevity)
-    const json = await getSystemOverview();
-    const { soc, solar } = extractSocAndSolar(json);
+  const data = await getSystemData();
+  let texto = '';
 
-    // Basic Alexa-style response (PlainText)
-    let respuesta = '';
-    const requestType = (req.body && req.body.request && req.body.request.type) || '';
-    const intentName = ((req.body && req.body.request && req.body.request.intent && req.body.request.intent.name) || '').toLowerCase();
-
-    if (requestType === 'LaunchRequest') {
-      respuesta = 'Bienvenido a Sistema Victron. Puedes preguntarme por batería o producción solar.';
-    } else if (requestType === 'IntentRequest') {
-      if (/bateria|batería|battery|batterystatus/.test(intentName)) {
-        if (soc !== null) respuesta = `El nivel de batería es del ${soc} por ciento.`;
-        else respuesta = 'No puedo obtener el nivel de batería en este momento.';
-      } else if (/solar|produccion|producción|energia|energía/.test(intentName)) {
-        if (solar !== null) respuesta = `La potencia solar actual es de ${solar} vatios.`;
-        else respuesta = 'No puedo obtener la producción solar en este momento.';
-      } else if (/sistema|estado|system/.test(intentName)) {
-        if (soc !== null && solar !== null) respuesta = `Sistema funcionando. Batería al ${soc}% y producción solar de ${solar} vatios.`;
-        else respuesta = 'Sistema Victron detectado. No hay datos completos en este momento.';
-      } else {
-        respuesta = 'Puedo informarte sobre la batería, producción solar o estado del sistema.';
-      }
-    } else {
-      respuesta = 'Bienvenido a Sistema Victron. ¿En qué puedo ayudarte?';
-    }
-
-    const alexaResponse = {
-      version: '1.0',
-      response: {
-        outputSpeech: {
-          type: 'PlainText',
-          text: respuesta
-        },
-        shouldEndSession: true
-      },
-      sessionAttributes: {}
-    };
-
-    res.setHeader('Content-Type', 'application/json');
-    res.status(200).json(alexaResponse);
-  } catch (err) {
-    console.error('Error /alexa:', err);
-    // Return friendly Alexa message
-    res.status(200).json({
-      version: '1.0',
-      response: {
-        outputSpeech: {
-          type: 'PlainText',
-          text: 'Error consultando el sistema. Intenta de nuevo más tarde.'
-        },
-        shouldEndSession: true
-      }
-    });
+  if (data.soc === null && data.solar === null) {
+    texto = 'No se pudo obtener información del sistema Victron.';
+  } else if (data.soc !== null && data.solar !== null) {
+    texto = `El sistema Victron funciona correctamente. La batería está al ${data.soc} por ciento y la potencia solar actual es de ${data.solar} vatios.`;
+  } else if (data.soc !== null) {
+    texto = `La batería está al ${data.soc} por ciento.`;
+  } else if (data.solar !== null) {
+    texto = `La potencia solar actual es de ${data.solar} vatios.`;
   }
+
+  const alexaResponse = {
+    version: '1.0',
+    response: {
+      outputSpeech: { type: 'PlainText', text: texto },
+      shouldEndSession: true
+    }
+  };
+
+  res.json(alexaResponse);
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Alexa-Victron corriendo en puerto ${PORT}`));
