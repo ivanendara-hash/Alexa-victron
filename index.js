@@ -2,10 +2,20 @@ import express from "express";
 const app = express();
 app.use(express.json());
 
-app.post("/", async (req, res) => {
-  const intentName = req.body?.request?.intent?.name || "";
+// Ruta raíz opcional
+app.get("/", (req, res) => {
+  res.send("✅ Alexa-Victron backend activo");
+});
+
+// Ruta principal que recibe solicitudes de Alexa
+app.post("/alexa", async (req, res) => {
+  const request = req.body?.request;
+  const intentName = request?.intent?.name || "";
+  console.log("👉 Intent recibido:", intentName);
+
   let responseText = "No entendí tu solicitud.";
 
+  // INTENTS personalizados
   if (intentName === "BateriaIntent") {
     responseText = "El nivel actual de la batería es del 78 %.";
   } else if (intentName === "SolarIntent") {
@@ -14,7 +24,8 @@ app.post("/", async (req, res) => {
     responseText = "Todo el sistema Victron funciona correctamente.";
   }
 
-  const response = {
+  // Respuesta a Alexa
+  const alexaResponse = {
     version: "1.0",
     response: {
       shouldEndSession: true,
@@ -24,7 +35,10 @@ app.post("/", async (req, res) => {
       }
     }
   };
-  res.json(response);
+
+  res.json(alexaResponse);
 });
 
-app.listen(3000, () => console.log("🚀 Alexa-Victron corriendo en puerto 3000"));
+app.listen(3000, () => {
+  console.log("🚀 Alexa-Victron corriendo en puerto 3000");
+});
