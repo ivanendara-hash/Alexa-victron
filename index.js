@@ -1,34 +1,42 @@
 import express from "express";
-import bodyParser from "body-parser";
 import fetch from "node-fetch";
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Endpoint raíz de prueba
-app.get("/", (req, res) => {
-  res.send("✅ Alexa Victron Skill activa y lista");
-});
+// 👇 ESTA ES TU DIRECCIÓN REAL DE NODE-RED:
+const NODE_RED_URL = "https://761526-nodered.proxyrelay12.victronenergy.com/alexa";
 
-// Redirección del webhook de Alexa hacia Node-RED
+// ==========================
+// 📡 ENDPOINT PRINCIPAL ALEXA
+// ==========================
 app.post("/alexa", async (req, res) => {
   try {
-    const nodeRedURL = "https://victron-nodered.onrender.com/alexa";
-    const response = await fetch(nodeRedURL, {
+    console.log("📩 Petición recibida desde Alexa");
+
+    // Reenviar la solicitud completa a Node-RED
+    const response = await fetch(NODE_RED_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
-    const data = await response.json();
-    res.json(data);
+
+    // Leer texto (por si no es JSON válido)
+    const text = await response.text();
+    console.log("📤 Respuesta de Node-RED:", text);
+
+    // Intentar enviar lo mismo de vuelta a Alexa
+    res.type("json").send(text);
   } catch (err) {
-    console.error("❌ Error reenviando a Node-RED:", err);
-    res.json({
+    console.error("❌ Error al reenviar a Node-RED:", err.message);
+
+    // Si falla la conexión con Node-RED
+    res.status(500).json({
       version: "1.0",
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: "Hubo un error al conectar con el sistema Victron.",
+          text: "No se pudo conectar con el sistema Victron. Verifica la conexión de Node-RED.",
         },
         shouldEndSession: true,
       },
@@ -36,6 +44,10 @@ app.post("/alexa", async (req, res) => {
   }
 });
 
-// Puerto Render
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Servidor Alexa Victron activo en puerto ${PORT}`));
+// ==========================
+// 🚀 INICIAR SERVIDOR EXPRESS
+// ==========================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor Alexa-Victron activo en puerto ${PORT}`);
+});
