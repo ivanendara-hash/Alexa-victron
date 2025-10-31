@@ -13,7 +13,7 @@ app.get("/", (req, res) => {
 // Redirección del webhook de Alexa hacia Node-RED
 app.post("/alexa", async (req, res) => {
   try {
-    const nodeRedURL = "http://127.0.0.1:1880/alexa"; // URL local si está en el mismo servidor
+    const nodeRedURL = "https://victron-nodered.onrender.com/alexa";
     const response = await fetch(nodeRedURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
