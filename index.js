@@ -1,40 +1,72 @@
-// === Alexa-Victron Backend ===
-// Versión estable final - Iván Endara
-
 import express from "express";
 import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
-// URL del flujo Node-RED
-const NODE_RED_URL = "https://761526-nodered.proxyrelay12.victronenergy.com/alexa";
+const PORT = process.env.PORT || 3000;
 
-// Ruta principal para Alexa Skill
+// === URL de tu Node-RED remoto ===
+const NODERED_URL = "https://761526-nodered.proxyrelay12.victronenergy.com/alexa";
+
 app.post("/alexa", async (req, res) => {
-  try {
-    console.log("📩 Petición recibida desde Alexa Skill");
+  console.log("📩 Petición recibida desde Alexa Skill");
 
-    // Reenviar al flujo de Node-RED
-    const response = await fetch(NODE_RED_URL, {
+  try {
+    // Reenviar la petición al flujo de Node-RED
+    const respuesta = await fetch(NODERED_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body),
     });
 
-    // Obtener y reenviar respuesta a Alexa
-    const data = await response.json();
-    console.log("✅ Respuesta enviada desde Node-RED:", data.response?.outputSpeech?.text);
-    res.json(data);
+    const texto = await respuesta.text();
+
+    // --- Manejar errores comunes del proxy Victron ---
+    if (texto.includes("Not authorized") || texto.includes("lost") || texto.includes("expired")) {
+      console.error("⚠️ El túnel VRM se desconectó o expiró.");
+      return res.json({
+        version: "1.0",
+        response: {
+          outputSpeech: {
+            type: "PlainText",
+            text: "El sistema Victron no está disponible en este momento. Por favor, revisa la conexión remota en VRM.",
+          },
+          shouldEndSession: true,
+        },
+      });
+    }
+
+    // --- Intentar parsear JSON válido ---
+    let json;
+    try {
+      json = JSON.parse(texto);
+    } catch (e) {
+      console.error("⚠️ Respuesta de Node-RED no es JSON válido:", texto);
+      return res.json({
+        version: "1.0",
+        response: {
+          outputSpeech: {
+            type: "PlainText",
+            text: "El sistema Victron respondió con un formato inesperado.",
+          },
+          shouldEndSession: true,
+        },
+      });
+    }
+
+    // --- Enviar respuesta limpia a Alexa ---
+    console.log("📤 Respuesta enviada a Alexa:", JSON.stringify(json.response.outputSpeech.text));
+    res.json(json);
 
   } catch (error) {
     console.error("❌ Error reenviando a Node-RED:", error);
-    res.status(500).json({
+    res.json({
       version: "1.0",
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: "Hubo un problema al comunicarme con el sistema Victron.",
+          text: "No se pudo contactar al sistema Victron. Verifica la conexión.",
         },
         shouldEndSession: true,
       },
@@ -42,10 +74,8 @@ app.post("/alexa", async (req, res) => {
   }
 });
 
-// Servidor activo
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor Alexa-Victron activo en puerto ${PORT}`);
-  console.log(`🌐 Reenviando peticiones a Node-RED en: ${NODE_RED_URL}`);
+  console.log(`🌐 Reenviando peticiones a Node-RED en: ${NODERED_URL}`);
   console.log("✅ Backend listo para Alexa");
 });
