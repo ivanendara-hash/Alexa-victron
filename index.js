@@ -5,15 +5,12 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
-// === URL de tu Node-RED remoto ===
 const NODERED_URL = "https://761526-nodered.proxyrelay12.victronenergy.com/alexa";
 
 app.post("/alexa", async (req, res) => {
   console.log("📩 Petición recibida desde Alexa Skill");
 
   try {
-    // Reenviar la petición al flujo de Node-RED
     const respuesta = await fetch(NODERED_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,52 +18,52 @@ app.post("/alexa", async (req, res) => {
     });
 
     const texto = await respuesta.text();
+    console.log("📥 Texto devuelto por Node-RED:", texto.substring(0, 80));
 
-    // --- Manejar errores comunes del proxy Victron ---
-    if (texto.includes("Not authorized") || texto.includes("lost") || texto.includes("expired")) {
-      console.error("⚠️ El túnel VRM se desconectó o expiró.");
+    // Si Node-RED devuelve texto simple, lo tratamos sin romper el backend
+    if (!texto || texto.startsWith("Not ") || texto.startsWith("<")) {
+      console.error("⚠️ Node-RED devolvió texto no válido o no autorizado");
       return res.json({
         version: "1.0",
         response: {
           outputSpeech: {
             type: "PlainText",
-            text: "El sistema Victron no está disponible en este momento. Por favor, revisa la conexión remota en VRM.",
+            text: "El flujo de Node-RED no respondió correctamente. Revisa la ruta /alexa en tu flujo.",
           },
           shouldEndSession: true,
         },
       });
     }
 
-    // --- Intentar parsear JSON válido ---
+    // Intentar convertir a JSON
     let json;
     try {
       json = JSON.parse(texto);
     } catch (e) {
-      console.error("⚠️ Respuesta de Node-RED no es JSON válido:", texto);
+      console.error("⚠️ Error parseando JSON:", e);
       return res.json({
         version: "1.0",
         response: {
           outputSpeech: {
             type: "PlainText",
-            text: "El sistema Victron respondió con un formato inesperado.",
+            text: "El formato de respuesta de Node-RED no es válido.",
           },
           shouldEndSession: true,
         },
       });
     }
 
-    // --- Enviar respuesta limpia a Alexa ---
-    console.log("📤 Respuesta enviada a Alexa:", JSON.stringify(json.response.outputSpeech.text));
+    console.log("📤 Respuesta válida de Node-RED:", json.response?.outputSpeech?.text);
     res.json(json);
 
   } catch (error) {
-    console.error("❌ Error reenviando a Node-RED:", error);
+    console.error("❌ Error general:", error);
     res.json({
       version: "1.0",
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: "No se pudo contactar al sistema Victron. Verifica la conexión.",
+          text: "No se pudo contactar a Node-RED.",
         },
         shouldEndSession: true,
       },
