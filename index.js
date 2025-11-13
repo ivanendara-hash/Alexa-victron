@@ -4,35 +4,59 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-// URL local del Node-RED en tu Cerbo GX
-const CERBO_URL = "http://192.168.1.50:1881/alexa";
+// === CONFIGURACIÓN VRM ===
+const VRM_INSTALLATION_ID = "761526"; // tu ID numérico
+const VRM_TOKEN = "96444887b101b7adce42716e3b3a7badefb2f3ef28f3e57ba78b3afda1efd750";
 
-// ✅ Ruta de prueba para verificar que el endpoint esté activo
-app.get("/alexa", (req, res) => {
-  res.send("✅ Alexa endpoint activo en Render");
-});
-
-// ✅ Ruta que recibe peticiones desde Alexa
-app.post("/alexa", async (req, res) => {
+// Endpoint principal para Alexa
+app.post("/", async (req, res) => {
   try {
-    // Reenvía la solicitud al Node-RED local
-    const response = await fetch(CERBO_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
+    // Solicita datos del sistema desde VRM
+    const response = await fetch(
+      `https://vrmapi.victronenergy.com/v2/installations/${VRM_INSTALLATION_ID}/system-overview`,
+      {
+        headers: {
+          "X-Authorization": `Bearer ${VRM_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    const data = await response.json();
-    return res.json(data);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-  } catch (error) {
-    console.error("❌ Error al comunicar con el Cerbo GX:", error.message);
+    const vrmData = await response.json();
+    const system = vrmData?.records || {};
+
+    // Extraer datos clave
+    const soc = system.battery?.stateOfCharge?.value || 0;
+    const solarPower = system.solar?.power || 0;
+
+    const mensaje = `Tu batería está al ${soc.toFixed(
+      0
+    )} por ciento y tus paneles están produciendo ${solarPower.toFixed(
+      0
+    )} vatios.`;
+
+    // === RESPUESTA PARA ALEXA ===
     return res.json({
       version: "1.0",
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: "No puedo comunicarme con tu sistema Victron en este momento. Verifica la conexión en VRM."
+          text: mensaje,
+        },
+        shouldEndSession: true,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error al comunicar con VRM:", error.message);
+
+    return res.json({
+      version: "1.0",
+      response: {
+        outputSpeech: {
+          type: "PlainText",
+          text: "No puedo obtener los datos de tu sistema Victron en este momento. Verifica la conexión con VRM.",
         },
         shouldEndSession: true,
       },
@@ -40,4 +64,6 @@ app.post("/alexa", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("✅ Alexa bridge activo en puerto 3000"));
+app.listen(3000, () =>
+  console.log("✅ Alexa bridge conectado correctamente a VRM en puerto 3000")
+);
