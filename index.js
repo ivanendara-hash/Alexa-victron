@@ -4,12 +4,18 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-// URL local de tu Cerbo GX (Node-RED)
+// URL local del Node-RED en tu Cerbo GX
 const CERBO_URL = "http://192.168.1.50:1881/alexa";
 
-app.post("/", async (req, res) => {
+// ✅ Ruta de prueba para verificar que el endpoint esté activo
+app.get("/alexa", (req, res) => {
+  res.send("✅ Alexa endpoint activo en Render");
+});
+
+// ✅ Ruta que recibe peticiones desde Alexa
+app.post("/alexa", async (req, res) => {
   try {
-    // Envía la solicitud desde Render hacia Node-RED
+    // Reenvía la solicitud al Node-RED local
     const response = await fetch(CERBO_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -18,6 +24,7 @@ app.post("/", async (req, res) => {
 
     const data = await response.json();
     return res.json(data);
+
   } catch (error) {
     console.error("❌ Error al comunicar con el Cerbo GX:", error.message);
     return res.json({
