@@ -6,7 +6,7 @@ app.use(express.json());
 
 // === CONFIGURACIÓN VRM ===
 const VRM_INSTALLATION_ID = "761526";
-const VRM_TOKEN = "96444887b101b7adce42716e3b3a7badefb2f3ef28f3e57ba78b3afda1efd750";
+const VRM_TOKEN = "e928db2f99325349a62acdf5e61f51b8187a07dd45515be4bd2703357b235809";
 
 // ==============================
 //      ENDPOINT PRINCIPAL
