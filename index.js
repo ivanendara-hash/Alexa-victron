@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-// === CONFIGURACIÓN VRM ===
+// === CONFIGURACIÓN VRM === 
 const VRM_INSTALLATION_ID = "761526";
 const VRM_TOKEN = "e928db2f99325349a62acdf5e61f51b8187a07dd45515be4bd2703357b235809"; 
 
