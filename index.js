@@ -4,19 +4,18 @@ import fetch from "node-fetch";
 const app = express();
 app.use(express.json());
 
-// === RUTA GET PARA QUE ALEXA NO FALLE ===
-app.get("/", (req, res) => {
-  res.status(200).send("Alexa Bridge OK");
-});
-
 // === CONFIGURACIÓN VRM === 
-const VRM_INSTALLATION_ID = "761526";
+const VRM_INSTALLATION_ID = "c0619ab8974d";  // <-- CORRECTO
 const VRM_TOKEN = "e928db2f99325349a62acdf5e61f51b8187a07dd45515be4bd2703357b235809";
 
-// === ENDPOINT POST PRINCIPAL ===
+// ==============================
+//      ENDPOINT PRINCIPAL
+// ==============================
 app.post("/", async (req, res) => {
+
   const alexaReq = req.body;
 
+  // ---- 1) LaunchRequest ----
   if (alexaReq?.request?.type === "LaunchRequest") {
     return res.json({
       version: "1.0",
@@ -30,6 +29,7 @@ app.post("/", async (req, res) => {
     });
   }
 
+  // ---- 2) IntentRequest (consultas del sistema) ----
   try {
     const response = await fetch(
       `https://vrmapi.victronenergy.com/v2/installations/${VRM_INSTALLATION_ID}/system-overview`,
