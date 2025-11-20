@@ -12,7 +12,6 @@ app.use(cors());
 // ================================
 //  ENVIRONMENT VARIABLES
 // ================================
-
 const VRM_USERNAME = "ivanendara@gmail.com";
 
 const VRM_SYSTEM_ID = "761526";
