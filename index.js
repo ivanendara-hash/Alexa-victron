@@ -1,5 +1,5 @@
 // ================================
-//  Victron – Alexa Backend-
+//  Victron – Alexa Backend
 // ================================
 
 import express from "express";
