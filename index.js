@@ -12,13 +12,11 @@ app.use(cors());
 // ================================
 //  ENVIRONMENT VARIABLES
 // ================================
-// 👉 Tu email ya configurado
+
 const VRM_USERNAME = "ivanendara@gmail.com";
 
-// 👉 Tu instalación fija: CASA = 761526
 const VRM_SYSTEM_ID = "761526";
 
-// 👉 El token debes ponerlo en Render
 const VRM_TOKEN = "e928db2f99325349a62acdf5e61f51b8187a07dd45515be4bd2703357b235809";
 
 if (!VRM_TOKEN) {
