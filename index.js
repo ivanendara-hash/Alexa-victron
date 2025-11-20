@@ -1,81 +1,129 @@
+// ================================
+//  Victron – Alexa Backend
+// ================================
+
 import express from "express";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-// === CONFIGURACIÓN VRM === 
-const VRM_INSTALLATION_ID = "c0619ab8974d";  // <-- CORRECTO
+// ================================
+//  ENVIRONMENT VARIABLES
+// ================================
+// 👉 Tu email ya configurado
+const VRM_USERNAME = "ivanendara@gmail.com";
+
+// 👉 Tu instalación fija: CASA = 761526
+const VRM_SYSTEM_ID = "761526";
+
+// 👉 El token debes ponerlo en Render
 const VRM_TOKEN = "e928db2f99325349a62acdf5e61f51b8187a07dd45515be4bd2703357b235809";
 
-// ==============================
-//      ENDPOINT PRINCIPAL
-// ==============================
-app.post("/", async (req, res) => {
+if (!VRM_TOKEN) {
+  console.error("❌ ERROR: Falta VRM_TOKEN (pónlo en Render)");
+}
 
-  const alexaReq = req.body;
+// ================================
+//  VRM FETCH FUNCTION
+// ================================
+async function vrmRequest(path) {
+  const url = `https://vrmapi.victronenergy.com/v2/${path}`;
 
-  // ---- 1) LaunchRequest ----
-  if (alexaReq?.request?.type === "LaunchRequest") {
-    return res.json({
-      version: "1.0",
-      response: {
-        outputSpeech: {
-          type: "PlainText",
-          text: "Bienvenido Iván. Tu sistema Victron está listo. ¿Qué deseas saber?"
-        },
-        shouldEndSession: false
-      }
-    });
+  const headers = {
+    "X-Authorization": `Bearer ${VRM_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+
+  const response = await fetch(url, { headers });
+
+  // Debug para 401
+  if (!response.ok) {
+    console.log(`❌ Error VRM: HTTP ${response.status}`);
+    const errorBody = await response.text();
+    console.log("➡️ Respuesta de VRM:", errorBody);
+    throw new Error(`VRM error HTTP ${response.status}`);
   }
 
-  // ---- 2) IntentRequest (consultas del sistema) ----
+  return response.json();
+}
+
+// ================================
+//  ROOT
+// ================================
+app.get("/", (req, res) => {
+  res.send("🚀 Victron Alexa API funcionando correctamente.");
+});
+
+// ================================
+//  Battery Endpoint
+// ================================
+app.get("/battery", async (req, res) => {
   try {
-    const response = await fetch(
-      `https://vrmapi.victronenergy.com/v2/installations/${VRM_INSTALLATION_ID}/system-overview`,
-      {
-        headers: {
-          "X-Authorization": `Bearer ${VRM_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
+    const result = await vrmRequest(
+      `installations/${VRM_SYSTEM_ID}/stats?type=battery`
     );
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const soc = result?.records?.[0]?.battery?.soc;
 
-    const vrmData = await response.json();
-    const system = vrmData?.records || {};
+    if (soc === undefined) {
+      return res.json({
+        message: "No puedo obtener el estado de la batería.",
+      });
+    }
 
-    const soc = system.battery?.stateOfCharge?.value || 0;
-    const solarPower = system.solar?.power || 0;
-
-    const mensaje = `Tu batería está al ${soc.toFixed(0)} por ciento y tus paneles producen ${solarPower.toFixed(0)} vatios.`;
-
-    return res.json({
-      version: "1.0",
-      response: {
-        outputSpeech: { type: "PlainText", text: mensaje },
-        shouldEndSession: true
-      }
+    res.json({
+      message: `La batería está al ${soc}%`,
+      soc,
     });
 
-  } catch (error) {
-    console.error("❌ Error VRM:", error.message);
-
-    return res.json({
-      version: "1.0",
-      response: {
-        outputSpeech: {
-          type: "PlainText",
-          text: "No puedo obtener datos de VRM en este momento."
-        },
-        shouldEndSession: true
-      }
+  } catch (err) {
+    res.json({
+      message: "No puedo leer la batería.",
+      error: err.message,
     });
   }
 });
 
-// Servidor
-app.listen(3000, () =>
-  console.log("✅ Alexa bridge conectado correctamente a VRM en puerto 3000")
-);
+// ================================
+//  Solar Endpoint
+// ================================
+app.get("/solar", async (req, res) => {
+  try {
+    const result = await vrmRequest(
+      `installations/${VRM_SYSTEM_ID}/stats?type=solar`
+    );
+
+    const solar = result?.records?.[0]?.solar;
+
+    if (!solar) {
+      return res.json({
+        message: "No puedo obtener la producción solar.",
+      });
+    }
+
+    res.json({
+      message: `Producción solar actual: ${solar} W`,
+      solar,
+    });
+
+  } catch (err) {
+    res.json({
+      message: "No puedo leer la producción solar.",
+      error: err.message,
+    });
+  }
+});
+
+// ================================
+//  Start Server
+// ================================
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`⚡ Alexa bridge conectado en puerto ${PORT}`);
+  console.log(`📡 Instalación VRM: ${VRM_SYSTEM_ID}`);
+  console.log(`👤 Usuario VRM: ${VRM_USERNAME}`);
+});
