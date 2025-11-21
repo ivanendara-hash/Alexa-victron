@@ -1,74 +1,131 @@
-// index.js
 import express from "express";
+import bodyParser from "body-parser";
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// URL de VRM y token
-const VRM_URL = "https://vrmapi.victronenergy.com/v2/systems/SYSTEM_ID/overview";
-const VRM_TOKEN = "TU_TOKEN_DE_VRM";
+// --------------------------------------------------
+// CONFIG VRM
+// --------------------------------------------------
+const VRM_SYSTEM_ID = process.env.VRM_ID; 
+const VRM_TOKEN = process.env.VRM_TOKEN;
 
-app.post("/alexa", async (req, res) => {
-  try {
-    const intentName = req.body?.request?.intent?.name;
+// Función para leer datos del VRM
+async function leerVRM(path) {
+    const url = `https://vrmapi.victronenergy.com/v2/installations/${VRM_SYSTEM_ID}/${path}`;
 
-    if (intentName === "EstadoBateriaIntent") {
-      // Usamos fetch nativo de Node.js
-      const responseVRM = await fetch(VRM_URL, {
+    const response = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${VRM_TOKEN}`,
-        },
-      });
+            "X-Authorization": `Bearer ${VRM_TOKEN}`
+        }
+    });
 
-      const vrmData = await responseVRM.json();
-
-      // Extraemos SOC y voltaje
-      const battery = vrmData?.data?.battery;
-      const soc = battery?.soc || 0;
-      const voltage = battery?.voltage || 0;
-
-      const speakOutput = `La batería está al ${soc}% de carga, con un voltaje de ${voltage} voltios.`;
-
-      return res.json({
-        version: "1.0",
-        response: {
-          outputSpeech: {
-            type: "PlainText",
-            text: speakOutput,
-          },
-          shouldEndSession: true,
-        },
-      });
+    if (!response.ok) {
+        console.error("Error VRM:", await response.text());
+        throw new Error("Error leyendo VRM");
     }
 
-    return res.json({
-      version: "1.0",
-      response: {
-        outputSpeech: {
-          type: "PlainText",
-          text: "No entendí la solicitud.",
-        },
-        shouldEndSession: true,
-      },
-    });
-  } catch (err) {
-    console.error("Error al consultar VRM:", err);
+    return response.json();
+}
 
-    return res.json({
-      version: "1.0",
-      response: {
-        outputSpeech: {
-          type: "PlainText",
-          text: "Ocurrió un error al obtener los datos de la batería desde VRM.",
-        },
-        shouldEndSession: true,
-      },
-    });
-  }
+// --------------------------------------------------
+// ALEXA HANDLER
+// --------------------------------------------------
+app.post("/", async (req, res) => {
+    console.log("====== ALEXA REQUEST ======");
+    console.log(JSON.stringify(req.body, null, 2));
+
+    try {
+        const intent = req.body.request?.intent?.name;
+
+        // -----------------------------
+        // INTENT: Abrir sistema Victron
+        // -----------------------------
+        if (intent === "AbrirSistemaVictronIntent") {
+            return res.json({
+                version: "1.0",
+                response: {
+                    outputSpeech: { type: "PlainText", text: "El sistema Victron está activo." },
+                    shouldEndSession: true
+                }
+            });
+        }
+
+        // -----------------------------
+        // INTENT: Estado de batería
+        // -----------------------------
+        if (intent === "EstadoBateriaIntent") {
+            const data = await leerVRM("system-overview");
+            const soc = data?.records?.battery?.stateOfCharge ?? null;
+
+            const texto = soc !== null
+                ? `El estado de la batería es ${soc} por ciento.`
+                : "No pude obtener el estado de la batería.";
+
+            return res.json({
+                version: "1.0",
+                response: {
+                    outputSpeech: { type: "PlainText", text: texto },
+                    shouldEndSession: true
+                }
+            });
+        }
+
+        // -----------------------------
+        // INTENT: Producción Solar
+        // -----------------------------
+        if (intent === "ProduccionSolarIntent") {
+            const data = await leerVRM("system-overview");
+            const solar = data?.records?.solar?.power ?? null;
+
+            const texto = solar !== null
+                ? `La producción solar actual es de ${solar} vatios.`
+                : "No pude obtener la producción solar.";
+
+            return res.json({
+                version: "1.0",
+                response: {
+                    outputSpeech: { type: "PlainText", text: texto },
+                    shouldEndSession: true
+                }
+            });
+        }
+
+        // -----------------------------
+        // DEFAULT
+        // -----------------------------
+        return res.json({
+            version: "1.0",
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "No entendí la solicitud."
+                },
+                shouldEndSession: true
+            }
+        });
+
+    } catch (error) {
+        console.error("ERROR:", error);
+
+        return res.json({
+            version: "1.0",
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Hubo un problema con la respuesta de la skill."
+                },
+                shouldEndSession: true
+            }
+        });
+    }
 });
 
+// --------------------------------------------------
+// SERVIDOR LISTO
+// --------------------------------------------------
 app.listen(PORT, () => {
-  console.log(`Servidor Alexa Victron escuchando en puerto ${PORT}`);
+    console.log(`Servidor Alexa Victron escuchando en puerto ${PORT}`);
 });
