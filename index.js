@@ -1,115 +1,68 @@
-import express from "express";
-import axios from "axios";
+const express = require('express');
+const bodyParser = require('body-parser');
 
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-// ------------------ Helper para Alexa ------------------
-function speak(text) {
-  return {
-    version: "1.0",
-    response: {
-      outputSpeech: {
-        type: "PlainText",
-        text,
-      },
-      shouldEndSession: true,
-    },
-  };
-}
+const PORT = 3000;
 
-// ------------------ ENDPOINT PRINCIPAL ------------------
-app.post("/alexa", async (req, res) => {
-  console.log("====== ALEXA REQUEST ======");
-  console.log(JSON.stringify(req.body, null, 2));
+app.post('/alexa', (req, res) => {
+    console.log('====== ALEXA REQUEST ======');
+    console.log(JSON.stringify(req.body, null, 2));
 
-  const request = req.body.request;
+    const requestType = req.body.request.type;
 
-  // ----------- LaunchRequest -----------
-  if (request.type === "LaunchRequest") {
-    return res.json(
-      speak("Bienvenido Iván. Tu sistema Victron está conectado correctamente.")
-    );
-  }
+    // Función para obtener los datos de Node-RED directamente
+    const getNodeRedData = () => {
+        // Estas variables deben coincidir con las que ya definiste en Node-RED
+        const SOC = global.get('SOC_Bat') || 0;      // Estado de la batería en %
+        const PV = global.get('PV_Power') || 0;      // Producción solar en W
+        return { SOC, PV };
+    };
 
-  // ----------- IntentRequest -----------
-  if (request.type === "IntentRequest") {
-    const intent = request.intent.name;
-    console.log("➡️ Intent recibido:", intent);
+    if (requestType === 'LaunchRequest') {
+        return res.json({
+            version: '1.0',
+            response: {
+                outputSpeech: {
+                    type: 'PlainText',
+                    text: 'Hola! Pregúntame sobre el estado de la batería o la producción solar.'
+                },
+                shouldEndSession: false
+            }
+        });
+    } else if (requestType === 'IntentRequest') {
+        const intentName = req.body.request.intent.name;
+        const { SOC, PV } = getNodeRedData();
 
-    // ---- Batería ----
-    if (intent === "BateriaIntent") {
-      try {
-        const data = await axios.get(`${process.env.VICTRON_ENDPOINT}/battery`);
-        const soc = data.data.soc;
+        let speechText = '';
 
-        if (soc === undefined || soc === null) {
-          return res.json(speak("No pude obtener el nivel de batería."));
+        if (intentName === 'BatteryIntent') {
+            speechText = `El estado de la batería es ${SOC}%`;
+        } else if (intentName === 'SolarIntent') {
+            speechText = `La producción solar actual es de ${PV} vatios`;
+        } else {
+            speechText = 'No entiendo tu solicitud, prueba preguntando por la batería o la producción solar.';
         }
 
-        return res.json(speak(`El nivel de batería es ${soc} por ciento.`));
-      } catch (e) {
-        console.error("❌ Error BateriaIntent:", e.message);
-        return res.json(
-          speak("No logré consultar la batería en este momento.")
-        );
-      }
+        return res.json({
+            version: '1.0',
+            response: {
+                outputSpeech: {
+                    type: 'PlainText',
+                    text: speechText
+                },
+                shouldEndSession: false
+            }
+        });
+    } else if (requestType === 'SessionEndedRequest') {
+        console.log('Session ended:', req.body.request.reason);
+        return res.sendStatus(200);
+    } else {
+        return res.sendStatus(400);
     }
-
-    // ---- Solar ----
-    if (intent === "SolarIntent") {
-      try {
-        const data = await axios.get(`${process.env.VICTRON_ENDPOINT}/solar`);
-        const watts = data.data.watts;
-
-        if (watts === undefined || watts === null) {
-          return res.json(speak("No pude obtener la producción solar."));
-        }
-
-        return res.json(
-          speak(`La producción solar actual es de ${watts} vatios.`)
-        );
-      } catch (e) {
-        console.error("❌ Error SolarIntent:", e.message);
-        return res.json(
-          speak("No logré consultar la producción solar en este momento.")
-        );
-      }
-    }
-
-    // ---- Estado completo ----
-    if (intent === "SistemaIntent") {
-      try {
-        const data = await axios.get(`${process.env.VICTRON_ENDPOINT}/status`);
-
-        const soc = data.data.soc;
-        const solar = data.data.solar;
-        const load = data.data.load;
-
-        return res.json(
-          speak(
-            `La batería está al ${soc} por ciento. ` +
-              `Producción solar actual ${solar} vatios. ` +
-              `Cargas consumiendo ${load} vatios.`
-          )
-        );
-      } catch (e) {
-        console.error("❌ Error SistemaIntent:", e.message);
-        return res.json(
-          speak("No logré consultar el estado general del sistema.")
-        );
-      }
-    }
-
-    // ---- Intent desconocido ----
-    return res.json(speak("No entendí esa solicitud."));
-  }
-
-  return res.json(speak("Solicitud desconocida."));
 });
 
-// ------------------ Puerto ------------------
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Servidor Alexa Victron escuchando en puerto " + PORT);
+    console.log(`Servidor Alexa Victron escuchando en puerto ${PORT}`);
 });
