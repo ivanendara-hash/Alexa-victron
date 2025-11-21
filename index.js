@@ -14,7 +14,7 @@ function speak(text) {
         type: "PlainText",
         text: text
       },
-      shouldEndSession: true
+      shouldEndSession: false
     }
   };
 }
