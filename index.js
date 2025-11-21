@@ -1,44 +1,51 @@
+// index.js
 import express from "express";
-import fetch from "node-fetch"; // npm install node-fetch@3
+import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
 const PORT = 3000;
 
-// URL de tu endpoint en Node-RED que devuelve los datos reales
-// Ejemplo: Node-RED Dashboard o endpoint HTTP que devuelve JSON con el estado de la batería
-const NODE_RED_URL = "http://localhost:1880/alexa/battery"; 
+// URL de VRM donde puedes consultar el estado de la batería
+// Reemplaza TOKEN y SYSTEM_ID con los de tu cuenta VRM
+const VRM_URL = "https://vrmapi.victronenergy.com/v2/systems/SYSTEM_ID/overview";
+const VRM_TOKEN = "TU_TOKEN_DE_VRM";
 
 app.post("/alexa", async (req, res) => {
   try {
-    const { request } = req.body;
+    const intentName = req.body?.request?.intent?.name;
 
-    if (request.type === "IntentRequest") {
-      const intentName = request.intent.name;
+    if (intentName === "EstadoBateriaIntent") {
+      // Consultar datos reales desde VRM
+      const responseVRM = await fetch(VRM_URL, {
+        headers: {
+          Authorization: `Bearer ${VRM_TOKEN}`,
+        },
+      });
 
-      if (intentName === "EstadoBateriaIntent") {
-        // Petición a Node-RED para obtener los datos reales
-        const responseNR = await fetch(NODE_RED_URL);
-        const dataNR = await responseNR.json();
+      const vrmData = await responseVRM.json();
 
-        // Ejemplo: dataNR = { soc: 78, voltage: 51.2, current: 10 }
-        const speakOutput = `La batería está al ${dataNR.soc}% de carga, con un voltaje de ${dataNR.voltage} voltios.`;
+      // Extraemos SOC y voltaje de la batería
+      const battery = vrmData?.data?.battery;
+      const soc = battery?.soc || 0;
+      const voltage = battery?.voltage || 0;
 
-        return res.json({
-          version: "1.0",
-          response: {
-            outputSpeech: {
-              type: "PlainText",
-              text: speakOutput,
-            },
-            shouldEndSession: true,
+      const speakOutput = `La batería está al ${soc}% de carga, con un voltaje de ${voltage} voltios.`;
+
+      return res.json({
+        version: "1.0",
+        response: {
+          outputSpeech: {
+            type: "PlainText",
+            text: speakOutput,
           },
-        });
-      }
+          shouldEndSession: true,
+        },
+      });
     }
 
-    // Default si no es el intent que queremos
+    // Respuesta por defecto si el intent no coincide
     return res.json({
       version: "1.0",
       response: {
@@ -50,13 +57,14 @@ app.post("/alexa", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Error en /alexa:", err);
+    console.error("Error al consultar VRM:", err);
+
     return res.json({
       version: "1.0",
       response: {
         outputSpeech: {
           type: "PlainText",
-          text: "Ocurrió un error al obtener los datos de la batería.",
+          text: "Ocurrió un error al obtener los datos de la batería desde VRM.",
         },
         shouldEndSession: true,
       },
