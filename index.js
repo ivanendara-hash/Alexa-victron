@@ -1,5 +1,5 @@
-const express = require('express');
-const bodyParser = require('body-parser');
+import express from 'express';
+import bodyParser from 'body-parser';
 
 const app = express();
 app.use(bodyParser.json());
@@ -7,16 +7,15 @@ app.use(bodyParser.json());
 const PORT = 3000;
 
 app.post('/alexa', (req, res) => {
-    console.log('====== ALEXA REQUEST ======'); 
+    console.log('====== ALEXA REQUEST ======');
     console.log(JSON.stringify(req.body, null, 2));
 
     const requestType = req.body.request.type;
 
     // Función para obtener los datos de Node-RED directamente
     const getNodeRedData = () => {
-        // Estas variables deben coincidir con las que ya definiste en Node-RED
-        const SOC = global.get('SOC_Bat') || 0;      // Estado de la batería en %
-        const PV = global.get('PV_Power') || 0;      // Producción solar en W
+        const SOC = globalThis.SOC_Bat || 0;      // Estado de la batería en %
+        const PV = globalThis.PV_Power || 0;      // Producción solar en W
         return { SOC, PV };
     };
 
