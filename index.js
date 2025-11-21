@@ -1,23 +1,24 @@
 import express from 'express';
 import bodyParser from 'body-parser';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
+const RED = require('node-red'); // Solo si necesitas interactuar con la instancia Node-RED
 const app = express();
 app.use(bodyParser.json());
 
 const PORT = 3000;
 
+// Función para leer datos de Node-RED
+const getNodeRedData = () => {
+    // Ajusta estos nombres a los que tienes en tu flujo
+    const SOC = global.get('SOC_Bat') || 0;    // Estado de batería
+    const PV = global.get('PV_Power') || 0;    // Producción solar
+    return { SOC, PV };
+};
+
 app.post('/alexa', (req, res) => {
-    console.log('====== ALEXA REQUEST ======');
-    console.log(JSON.stringify(req.body, null, 2));
-
     const requestType = req.body.request.type;
-
-    // Función para obtener los datos de Node-RED directamente
-    const getNodeRedData = () => {
-        const SOC = globalThis.SOC_Bat || 0;      // Estado de la batería en %
-        const PV = globalThis.PV_Power || 0;      // Producción solar en W
-        return { SOC, PV };
-    };
 
     if (requestType === 'LaunchRequest') {
         return res.json({
