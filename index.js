@@ -1,14 +1,12 @@
 // index.js
 import express from "express";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
 const PORT = 3000;
 
-// URL de VRM donde puedes consultar el estado de la batería
-// Reemplaza TOKEN y SYSTEM_ID con los de tu cuenta VRM
+// URL de VRM y token
 const VRM_URL = "https://vrmapi.victronenergy.com/v2/systems/SYSTEM_ID/overview";
 const VRM_TOKEN = "TU_TOKEN_DE_VRM";
 
@@ -17,7 +15,7 @@ app.post("/alexa", async (req, res) => {
     const intentName = req.body?.request?.intent?.name;
 
     if (intentName === "EstadoBateriaIntent") {
-      // Consultar datos reales desde VRM
+      // Usamos fetch nativo de Node.js
       const responseVRM = await fetch(VRM_URL, {
         headers: {
           Authorization: `Bearer ${VRM_TOKEN}`,
@@ -26,7 +24,7 @@ app.post("/alexa", async (req, res) => {
 
       const vrmData = await responseVRM.json();
 
-      // Extraemos SOC y voltaje de la batería
+      // Extraemos SOC y voltaje
       const battery = vrmData?.data?.battery;
       const soc = battery?.soc || 0;
       const voltage = battery?.voltage || 0;
@@ -45,7 +43,6 @@ app.post("/alexa", async (req, res) => {
       });
     }
 
-    // Respuesta por defecto si el intent no coincide
     return res.json({
       version: "1.0",
       response: {
