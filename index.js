@@ -1,40 +1,67 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middlewares
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Endpoint raíz
-app.get("/", (req, res) => {
-  res.send("Victron Alexa Backend funcionando correctamente ✔️");
-});
-
-// Endpoint principal para Alexa
-app.post("/alexa", (req, res) => {
-  console.log("Solicitud recibida desde Alexa:");
-  console.log(JSON.stringify(req.body, null, 2));
-
-  // Construimos la respuesta estándar de Alexa
-  const response = {
+// Función generadora de respuestas para Alexa
+function speak(text) {
+  return {
     version: "1.0",
     response: {
-      shouldEndSession: true,
       outputSpeech: {
         type: "PlainText",
-        text: "Tu sistema Victron está funcionando correctamente."
-      }
+        text: text
+      },
+      shouldEndSession: true
     }
   };
+}
 
-  res.json(response);
+app.post("/", (req, res) => {
+  console.log("🔔 Solicitud recibida desde Alexa:");
+  console.log(JSON.stringify(req.body, null, 2));
+
+  const request = req.body.request;
+
+  // Cuando el usuario dice: "Alexa, abre Victron"
+  if (request.type === "LaunchRequest") {
+    return res.json(
+      speak("Bienvenido Iván. Tu sistema Victron está conectado correctamente.")
+    );
+  }
+
+  // Procesar intents personalizados
+  if (request.type === "IntentRequest") {
+    const intent = request.intent.name;
+
+    if (intent === "EstadoBateriaIntent") {
+      return res.json(
+        speak("La batería está al noventa por ciento. Todo funcionando normal.")
+      );
+    }
+
+    if (intent === "ProduccionSolarIntent") {
+      return res.json(
+        speak("Estás produciendo ochocientos vatios de tus paneles solares.")
+      );
+    }
+
+    // Intent desconocido
+    return res.json(
+      speak("No entendí ese comando. Intenta otra consulta sobre Victron.")
+    );
+  }
+
+  // Cualquier otra cosa
+  return res.json(
+    speak("No pude procesar la solicitud. Inténtalo otra vez.")
+  );
 });
 
-// Iniciar servidor
+// Puerto Render
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor Alexa Victron iniciado en el puerto ${PORT}`);
 });
