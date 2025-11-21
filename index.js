@@ -1,68 +1,46 @@
 import express from 'express';
-import bodyParser from 'body-parser';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
 
-const RED = require('node-red'); // Solo si necesitas interactuar con la instancia Node-RED
 const app = express();
-app.use(bodyParser.json());
+const port = 3000;
 
-const PORT = 3000;
+app.use(express.json());
 
-// Función para leer datos de Node-RED
-const getNodeRedData = () => {
-    // Ajusta estos nombres a los que tienes en tu flujo
-    const SOC = global.get('SOC_Bat') || 0;    // Estado de batería
-    const PV = global.get('PV_Power') || 0;    // Producción solar
-    return { SOC, PV };
-};
+// Función de depuración
+function debugLog(msg, data) {
+    console.log(`[DEBUG] ${msg}:`, JSON.stringify(data, null, 2));
+}
 
+// Ruta principal para Alexa
 app.post('/alexa', (req, res) => {
-    const requestType = req.body.request.type;
+    debugLog('Solicitud recibida de Alexa', req.body);
 
-    if (requestType === 'LaunchRequest') {
-        return res.json({
-            version: '1.0',
-            response: {
-                outputSpeech: {
-                    type: 'PlainText',
-                    text: 'Hola! Pregúntame sobre el estado de la batería o la producción solar.'
-                },
-                shouldEndSession: false
-            }
-        });
-    } else if (requestType === 'IntentRequest') {
-        const intentName = req.body.request.intent.name;
-        const { SOC, PV } = getNodeRedData();
+    // Ejemplo de datos desde Node-RED
+    // Asegúrate que tus datos estén en global context de Node-RED
+    const batteryData = global.get('batteryData') || {
+        soc: 0,
+        voltage: 0,
+        current: 0
+    };
+    debugLog('Datos de batería obtenidos de Node-RED', batteryData);
 
-        let speechText = '';
-
-        if (intentName === 'BatteryIntent') {
-            speechText = `El estado de la batería es ${SOC}%`;
-        } else if (intentName === 'SolarIntent') {
-            speechText = `La producción solar actual es de ${PV} vatios`;
-        } else {
-            speechText = 'No entiendo tu solicitud, prueba preguntando por la batería o la producción solar.';
+    // Respuesta para Alexa
+    const response = {
+        version: '1.0',
+        response: {
+            outputSpeech: {
+                type: 'PlainText',
+                text: `El estado de la batería es: ${batteryData.soc}% de carga, ${batteryData.voltage} voltios, ${batteryData.current} amperios.`
+            },
+            shouldEndSession: true
         }
+    };
 
-        return res.json({
-            version: '1.0',
-            response: {
-                outputSpeech: {
-                    type: 'PlainText',
-                    text: speechText
-                },
-                shouldEndSession: false
-            }
-        });
-    } else if (requestType === 'SessionEndedRequest') {
-        console.log('Session ended:', req.body.request.reason);
-        return res.sendStatus(200);
-    } else {
-        return res.sendStatus(400);
-    }
+    debugLog('Respuesta enviada a Alexa', response);
+    res.json(response);
 });
 
-app.listen(PORT, () => {
-    console.log(`Servidor Alexa Victron escuchando en puerto ${PORT}`);
+// Puedes añadir más rutas si quieres consultar inversor, paneles, etc.
+
+app.listen(port, () => {
+    console.log(`Servidor Alexa Victron escuchando en puerto ${port}`);
 });
