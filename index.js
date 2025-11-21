@@ -17,6 +17,10 @@ function speak(text) {
     },
   };
 }
+// ------- RENDER ------- //
+app.post("/alexa", async (req, res) => {
+  console.log("====== ALEXA REQUEST ======");
+  console.log(JSON.stringify(req.body, null, 2));
 
 // ------- ENDPOINT PRINCIPAL ALEXA ------- //
 app.post("/alexa", async (req, res) => {
