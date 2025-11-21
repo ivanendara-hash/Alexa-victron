@@ -1,3 +1,4 @@
+// index.js
 import express from "express";
 import bodyParser from "body-parser";
 
@@ -12,22 +13,26 @@ const PORT = process.env.PORT || 3000;
 const VRM_SYSTEM_ID = process.env.VRM_ID; 
 const VRM_TOKEN = process.env.VRM_TOKEN;
 
+// --------------------------------------------------
 // Función para leer datos del VRM
+// --------------------------------------------------
 async function leerVRM(path) {
     const url = `https://vrmapi.victronenergy.com/v2/installations/${VRM_SYSTEM_ID}/${path}`;
-
-    const response = await fetch(url, {
-        headers: {
-            "X-Authorization": `Bearer ${VRM_TOKEN}`
+    try {
+        const response = await fetch(url, {
+            headers: { "X-Authorization": `Bearer ${VRM_TOKEN}` }
+        });
+        if (!response.ok) {
+            console.error("Error VRM:", await response.text());
+            throw new Error("Error leyendo VRM");
         }
-    });
-
-    if (!response.ok) {
-        console.error("Error VRM:", await response.text());
-        throw new Error("Error leyendo VRM");
+        const data = await response.json();
+        console.log("VRM DATA:", JSON.stringify(data, null, 2)); // para depuración
+        return data;
+    } catch (err) {
+        console.error("Fallo al conectar con VRM:", err);
+        throw err;
     }
-
-    return response.json();
 }
 
 // --------------------------------------------------
@@ -99,17 +104,13 @@ app.post("/", async (req, res) => {
         return res.json({
             version: "1.0",
             response: {
-                outputSpeech: {
-                    type: "PlainText",
-                    text: "No entendí la solicitud."
-                },
+                outputSpeech: { type: "PlainText", text: "No entendí la solicitud." },
                 shouldEndSession: true
             }
         });
 
     } catch (error) {
         console.error("ERROR:", error);
-
         return res.json({
             version: "1.0",
             response: {
