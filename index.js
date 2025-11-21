@@ -7,7 +7,7 @@ app.use(bodyParser.json());
 const PORT = 3000;
 
 app.post('/alexa', (req, res) => {
-    console.log('====== ALEXA REQUEST ======');
+    console.log('====== ALEXA REQUEST ======'); 
     console.log(JSON.stringify(req.body, null, 2));
 
     const requestType = req.body.request.type;
