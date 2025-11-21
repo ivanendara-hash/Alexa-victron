@@ -1,46 +1,69 @@
-import express from 'express';
+import express from "express";
+import fetch from "node-fetch"; // npm install node-fetch@3
 
 const app = express();
-const port = 3000;
-
 app.use(express.json());
 
-// Función de depuración
-function debugLog(msg, data) {
-    console.log(`[DEBUG] ${msg}:`, JSON.stringify(data, null, 2));
-}
+const PORT = 3000;
 
-// Ruta principal para Alexa
-app.post('/alexa', (req, res) => {
-    debugLog('Solicitud recibida de Alexa', req.body);
+// URL de tu endpoint en Node-RED que devuelve los datos reales
+// Ejemplo: Node-RED Dashboard o endpoint HTTP que devuelve JSON con el estado de la batería
+const NODE_RED_URL = "http://localhost:1880/alexa/battery"; 
 
-    // Ejemplo de datos desde Node-RED
-    // Asegúrate que tus datos estén en global context de Node-RED
-    const batteryData = global.get('batteryData') || {
-        soc: 0,
-        voltage: 0,
-        current: 0
-    };
-    debugLog('Datos de batería obtenidos de Node-RED', batteryData);
+app.post("/alexa", async (req, res) => {
+  try {
+    const { request } = req.body;
 
-    // Respuesta para Alexa
-    const response = {
-        version: '1.0',
-        response: {
+    if (request.type === "IntentRequest") {
+      const intentName = request.intent.name;
+
+      if (intentName === "EstadoBateriaIntent") {
+        // Petición a Node-RED para obtener los datos reales
+        const responseNR = await fetch(NODE_RED_URL);
+        const dataNR = await responseNR.json();
+
+        // Ejemplo: dataNR = { soc: 78, voltage: 51.2, current: 10 }
+        const speakOutput = `La batería está al ${dataNR.soc}% de carga, con un voltaje de ${dataNR.voltage} voltios.`;
+
+        return res.json({
+          version: "1.0",
+          response: {
             outputSpeech: {
-                type: 'PlainText',
-                text: `El estado de la batería es: ${batteryData.soc}% de carga, ${batteryData.voltage} voltios, ${batteryData.current} amperios.`
+              type: "PlainText",
+              text: speakOutput,
             },
-            shouldEndSession: true
-        }
-    };
+            shouldEndSession: true,
+          },
+        });
+      }
+    }
 
-    debugLog('Respuesta enviada a Alexa', response);
-    res.json(response);
+    // Default si no es el intent que queremos
+    return res.json({
+      version: "1.0",
+      response: {
+        outputSpeech: {
+          type: "PlainText",
+          text: "No entendí la solicitud.",
+        },
+        shouldEndSession: true,
+      },
+    });
+  } catch (err) {
+    console.error("Error en /alexa:", err);
+    return res.json({
+      version: "1.0",
+      response: {
+        outputSpeech: {
+          type: "PlainText",
+          text: "Ocurrió un error al obtener los datos de la batería.",
+        },
+        shouldEndSession: true,
+      },
+    });
+  }
 });
 
-// Puedes añadir más rutas si quieres consultar inversor, paneles, etc.
-
-app.listen(port, () => {
-    console.log(`Servidor Alexa Victron escuchando en puerto ${port}`);
+app.listen(PORT, () => {
+  console.log(`Servidor Alexa Victron escuchando en puerto ${PORT}`);
 });
