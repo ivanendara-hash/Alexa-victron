@@ -70,7 +70,7 @@ app.post("/", async (req, res) => {
           return res.json(speak("Entendido, apagando el inversor."));
 
         default:
-          return res.json(speak("Lo siento Iván, no entendí ese comando.", false)); 
+          return res.json(speak("Lo siento Iván, no entendí ese comando.", false));
       }
     }
 
