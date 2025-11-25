@@ -5,7 +5,7 @@ app.use(express.json());
 
 function speak(text, end = true) {
   return {
-    version: "1.0",
+   version: "1.0",
     response: {
       outputSpeech: { type: "PlainText", text },
       shouldEndSession: end
