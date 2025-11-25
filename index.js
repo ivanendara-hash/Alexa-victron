@@ -1,11 +1,12 @@
-const express = require("express");
- const app = express();
+import express from "express";
+import fetch from "node-fetch";
 
+const app = express();
 app.use(express.json());
 
 function speak(text, end = true) {
   return {
-   version: "1.0",
+    version: "1.0",
     response: {
       outputSpeech: { type: "PlainText", text },
       shouldEndSession: end
@@ -13,39 +14,59 @@ function speak(text, end = true) {
   };
 }
 
+// URL de tu Node-RED en tu casa/servidor Victron
+const NODE_RED_URL = process.env.NODE_RED_URL; 
+// Ejemplo: http://192.168.1.100:1880/victron-data
+
 app.post("/", async (req, res) => {
   console.log("====== ALEXA REQUEST ======");
   console.log(JSON.stringify(req.body, null, 2));
 
   try {
-    const request = req.body.request;
+    const { request } = req.body;
 
+    // ***** LaunchRequest *****
     if (request.type === "LaunchRequest") {
       return res.json(
-        speak("Hola Iván, tu sistema Victron está listo. ¿Qué deseas consultar?", false)
+        speak("Hola Iván, tu sistema Victron está listo para darte información.", false)
       );
     }
 
+    // ***** IntentRequest *****
     if (request.type === "IntentRequest") {
       const intent = request.intent.name;
 
-      switch (intent) {
-        case "BateriaIntent":
-          return res.json(speak("El nivel actual de batería es del 82 por ciento."));
-        case "SolarIntent":
-          return res.json(speak("La producción solar actual es de 940 vatios."));
-        case "SistemaIntent":
-          return res.json(speak("El sistema Victron funciona normalmente."));
-        default:
-          return res.json(speak("No entendí ese comando.", true));
+      // Llamar a Node-RED:
+      const data = await fetch(NODE_RED_URL).then(r => r.json());
+
+      if (intent === "BateriaIntent") {
+        return res.json(
+          speak(`El estado de la batería es ${data.soc}%`, true)
+        );
       }
+
+      if (intent === "SolarIntent") {
+        return res.json(
+          speak(`La producción solar actual es ${data.solar} vatios`, true)
+        );
+      }
+
+      if (intent === "SistemaIntent") {
+        return res.json(
+          speak(`El consumo actual es ${data.load} vatios`, true)
+        );
+      }
+
+      return res.json(speak("No entendí ese comando.", true));
     }
 
-    return res.json(speak("Comando no reconocido.", true));
-
-  } catch (error) {
-    console.error("ERROR:", error);
-    return res.json(speak("Hubo un problema procesando la solicitud."));
+    // Otro tipo de request
+    return res.json(speak("No pude procesar la solicitud.", true));
+  } catch (err) {
+    console.error("ERROR:", err);
+    return res.json(
+      speak("Hubo un problema obteniendo los datos del sistema Victron.")
+    );
   }
 });
 
