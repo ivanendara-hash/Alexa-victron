@@ -48,12 +48,12 @@ app.post("/alexa", async (req, res) => {
 
       let texto = "";
 
-      if (intent.includes("bateria") || intent.includes("battery") || intent.includes("soc")) {
+      if (intent.includes("bateria")) {
         texto = `El nivel de batería es del ${soc} por ciento.`;
-      } else if (intent.includes("solar") || intent.includes("produccion") || intent.includes("pv")) {
-        texto = `La producción solar es de ${pv} vatios en este momento.`;
-      } else if (intent.includes("sistema") || intent.includes("status") || intent.includes("estado")) {
-        texto = `La batería está al ${soc}%. Producción solar ${pv}W. Cargas consumiendo ${load}W.`;
+      } else if (intent.includes("solar")) {
+        texto = `La producción solar es de ${pv} vatios.`;
+      } else if (intent.includes("sistema")) {
+        texto = `Batería al ${soc}%. Solar ${pv}W. Cargas ${load}W.`;
       } else {
         texto = `La batería está al ${soc}% y la producción solar es de ${pv}W.`;
       }
